@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 )
 
@@ -27,6 +27,18 @@ var users = []User{
 }
 
 
+type Response struct {
+	Method string  `json:"method"`
+	Message string `json:"message"`
+	Status int     `json:"status"`
+}
+
+func NewResponse(method, message string, status int) Response{
+
+	return Response{Method: method, Message: message, Status: status}
+}
+
+
 func HttpInfo(r *http.Request) {
 	fmt.Printf("%s\t %s \t %s\n", r.Method, r.Proto, r.URL)
 }
@@ -36,6 +48,10 @@ func main() {
 	fmt.Println("API running on port 1000")
 
 	r := mux.NewRouter().StrictSlash(true)
+
+	headers := handlers.AllowedHeaders([]string{"X-Request", "Content-Type", "Authorization"})
+	methods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE"})
+	origins := handlers.AllowedOrigins([]string{"*"})
 
 	r.HandleFunc("/users", getUsers).Methods("GET")
 
@@ -47,7 +63,7 @@ func main() {
 
 	r.HandleFunc("/users/{id}", deleteUser).Methods("DELETE")
 
-	log.Fatal(http.ListenAndServe(":1000", r))
+	log.Fatal(http.ListenAndServe(":1000", handlers.CORS(headers, methods, origins)(r) ))
 }
 
 
@@ -81,7 +97,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	json.NewEncoder(w).Encode(&User{})
+	json.NewEncoder(w).Encode(NewResponse(r.Method, "failed", 400))
 }
 
 func PostUser(w http.ResponseWriter, r *http.Request) {
@@ -97,12 +113,13 @@ func PostUser(w http.ResponseWriter, r *http.Request) {
 	err := json.Unmarshal(body, &user)
 
 	if err != nil {
-		log.Fatal(err)
+		json.NewEncoder(w).Encode(NewResponse(r.Method, "failed", 400))
+		return
 	}
 
 	users = append(users, user)
 
-	json.NewEncoder(w).Encode(users)
+	json.NewEncoder(w).Encode(json.NewEncoder(w).Encode(NewResponse(r.Method, "success", 200)))
 }
 
 func putUser(w http.ResponseWriter, r *http.Request) {
@@ -130,12 +147,12 @@ func putUser(w http.ResponseWriter, r *http.Request) {
 		if users[index].Id == id {
 
 			users[index] = user
-			json.NewEncoder(w).Encode(user)
+			json.NewEncoder(w).Encode(NewResponse(r.Method, "sucess", 200))
 			return
 		}
 	}
 
-	json.NewEncoder(w).Encode(&User{})
+	json.NewEncoder(w).Encode(NewResponse(r.Method, "failed", 400))
 }
  
 func deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -153,11 +170,11 @@ func deleteUser(w http.ResponseWriter, r *http.Request) {
 			//O primeiro parâmetro retorna todos os valores anteriores ao valor atual
 			//O segundo parâmetro retorna todos os valores após o valor atual
 			users = append(users[:index], users[index + 1:]...)
-			json.NewEncoder(w).Encode(users)
+			json.NewEncoder(w).Encode(NewResponse(r.Method, "success", 200))
 			return
 
 		}
 	}
 
-	json.NewEncoder(w).Encode(&User{})
+	json.NewEncoder(w).Encode(NewResponse(r.Method, "failed", 400))
 }
